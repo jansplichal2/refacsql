@@ -1,0 +1,23 @@
+[sqlfluff]
+dialect = tsql
+exclude_rules = L009,L031,L034  # allow explicit aliasing, spacing near operators, optional trailing commas
+
+[layout]
+indent_unit = space
+tab_space_size = 4
+line_length = 100
+
+[capitalisation]
+keywords = upper
+functions = lower
+identifiers = consistent
+
+[formatting]
+newline = lf
+
+[rules]
+# Optional stricter enforcement can be added here
+# L003: Indentation
+# L010: Keywords must be capitalised
+# L014: Inconsistent capitalisation
+# L016: Line too long

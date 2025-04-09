@@ -48,5 +48,9 @@ database = "my_database"
 driver = "ODBC Driver 17 for SQL Server"
 ```
 
+```
+sqlfluff fix --dialect tsql path/to/file.sql
+```
+
 ## License
 MIT

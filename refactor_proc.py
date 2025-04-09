@@ -44,21 +44,24 @@ def log_audit(entry: dict, path: str):
         f.write(json.dumps(entry) + "\n")
 
 
-def call_ai_refactor(api_key: str, endpoint: str, proc_name: str, sql_text: str, context: dict = {},
-                     lint_errors: list = []) -> str:
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    payload = {
+def build_prompt(proc_name: str, sql_text: str, context: dict, lint_errors: list) -> dict:
+    return {
+        "instruction": "Please format, refactor, and optimize the stored procedure below using the provided metadata. Ensure the output is clean, logically structured, and avoids redundant or outdated constructs.",
         "proc_name": proc_name,
         "sql": sql_text,
         "context": context,
         "lint_errors": lint_errors
     }
-    response = requests.post(endpoint, headers=headers, json=payload)
+
+
+def call_ai_refactor(api_key: str, endpoint: str, prompt: dict) -> str:
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    response = requests.post(endpoint, headers=headers, json=prompt)
     response.raise_for_status()
-    return response.json().get("refactored_sql", sql_text)
+    return response.json().get("refactored_sql", prompt["sql"])
 
 
 def main():
@@ -95,15 +98,15 @@ def main():
         # Run sqlfluff on current SQL
         lint_issues = run_sqlfluff_check(proc_sql, config)
 
+        # Build prompt
+        prompt = build_prompt(args.proc_name, proc_sql, context, lint_issues)
+
         # Call AI refactoring API
         try:
             refactored_sql = call_ai_refactor(
                 api_key=config['api']['key'],
                 endpoint=config['api']['endpoint'],
-                proc_name=args.proc_name,
-                sql_text=proc_sql,
-                context=context,
-                lint_errors=lint_issues
+                prompt=prompt
             )
         except requests.HTTPError as e:
             print(f"AI API request failed: {e}")
@@ -114,8 +117,8 @@ def main():
 
         log_audit({
             "exchange": current_exchange + 1,
-            "input_sql": proc_sql,
-            "refactored_sql": refactored_sql,
+            "prompt": prompt,
+            "response": {"refactored_sql": refactored_sql},
             "lint_issues": new_lint_issues,
             "context_keys": list(context.keys())
         }, args.audit_log)
