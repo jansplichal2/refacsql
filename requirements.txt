@@ -1,0 +1,4 @@
+sqlfluff[tsql]
+tomli; python_version < "3.11"
+requests
+pyodbc
