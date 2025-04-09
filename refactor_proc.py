@@ -39,6 +39,23 @@ def run_sqlfluff_check(sql_text: str, config: dict) -> list:
         return []
 
 
+def run_sqlfluff_fix(sql_text: str, config: dict) -> str:
+    temp_file = Path(config['defaults']['temp_output_dir']) / "fix_input.sql"
+    temp_file.write_text(sql_text)
+    subprocess.run(
+        [
+            config['lint']['sqlfluff_path'],
+            "fix",
+            "--dialect",
+            config['lint']['dialect'],
+            str(temp_file)
+        ],
+        capture_output=True,
+        text=True
+    )
+    return temp_file.read_text()
+
+
 def log_audit(entry: dict, path: str):
     with open(path, "a") as f:
         f.write(json.dumps(entry) + "\n")
@@ -112,13 +129,16 @@ def main():
             print(f"AI API request failed: {e}")
             break
 
-        # Run sqlfluff again to validate refactored SQL
-        new_lint_issues = run_sqlfluff_check(refactored_sql, config)
+        # Apply sqlfluff formatting
+        formatted_sql = run_sqlfluff_fix(refactored_sql, config)
+
+        # Run sqlfluff again to validate formatted SQL
+        new_lint_issues = run_sqlfluff_check(formatted_sql, config)
 
         log_audit({
             "exchange": current_exchange + 1,
             "prompt": prompt,
-            "response": {"refactored_sql": refactored_sql},
+            "response": {"refactored_sql": formatted_sql},
             "lint_issues": new_lint_issues,
             "context_keys": list(context.keys())
         }, args.audit_log)
@@ -133,7 +153,7 @@ def main():
                 print("Too many consecutive lint failures. Aborting.")
                 break
 
-        proc_sql = refactored_sql
+        proc_sql = formatted_sql
         current_exchange += 1
 
 
