@@ -8,6 +8,7 @@ from dependency_resolver import (
     fetch_proc_definition,
 )
 import tomli
+import requests
 
 
 def load_config(path: str = "config/default_config.toml") -> dict:
@@ -42,6 +43,22 @@ def log_audit(entry: dict, path: str):
         f.write(json.dumps(entry) + "\n")
 
 
+def call_ai_refactor(api_key: str, endpoint: str, proc_name: str, sql_text: str, context: dict = {}, lint_errors: list = []) -> str:
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "proc_name": proc_name,
+        "sql": sql_text,
+        "context": context,
+        "lint_errors": lint_errors
+    }
+    response = requests.post(endpoint, headers=headers, json=payload)
+    response.raise_for_status()
+    return response.json().get("refactored_sql", sql_text)
+
+
 def main():
     parser = argparse.ArgumentParser(description="AI-assisted T-SQL stored procedure refactoring tool.")
     parser.add_argument("--proc-name", required=True, help="Name of the stored procedure to refactor")
@@ -67,23 +84,39 @@ def main():
 
     current_exchange = 0
     lint_failures = 0
+    context = {}
 
     while current_exchange < args.max_exchanges:
         print(f"Exchange {current_exchange + 1}...")
 
-        # Placeholder: AI logic goes here
-        refactored_sql = proc_sql  # Replace with AI call later
+        # Run sqlfluff on current SQL
+        lint_issues = run_sqlfluff_check(proc_sql, config)
 
-        # Run sqlfluff
-        lint_issues = run_sqlfluff_check(refactored_sql, config)
+        # Call AI refactoring API
+        try:
+            refactored_sql = call_ai_refactor(
+                api_key=config['api']['key'],
+                endpoint=config['api']['endpoint'],
+                proc_name=args.proc_name,
+                sql_text=proc_sql,
+                context=context,
+                lint_errors=lint_issues
+            )
+        except requests.HTTPError as e:
+            print(f"AI API request failed: {e}")
+            break
+
+        # Run sqlfluff again to validate refactored SQL
+        new_lint_issues = run_sqlfluff_check(refactored_sql, config)
+
         log_audit({
             "exchange": current_exchange + 1,
             "input_sql": proc_sql,
-            "output_sql": refactored_sql,
-            "lint_issues": lint_issues
+            "refactored_sql": refactored_sql,
+            "lint_issues": new_lint_issues
         }, args.audit_log)
 
-        if not lint_issues:
+        if not new_lint_issues:
             print("Lint passed. Final SQL produced.")
             break
         else:
@@ -93,6 +126,7 @@ def main():
                 print("Too many consecutive lint failures. Aborting.")
                 break
 
+        proc_sql = refactored_sql
         current_exchange += 1
 
 
