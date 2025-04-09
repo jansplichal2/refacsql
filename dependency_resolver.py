@@ -1,5 +1,4 @@
 import pyodbc
-import re
 from typing import List, Dict, Any, Set
 
 
@@ -75,52 +74,44 @@ def fetch_scalar_udt_info(conn: pyodbc.Connection, type_name: str) -> Dict[str, 
     return dict(zip([column[0] for column in cursor.description], row)) if row else {}
 
 
-def collect_dependencies(sql_text: str, conn: pyodbc.Connection, max_depth: int = 1, current_depth: int = 0,
-                         visited: Set[str] = None) -> Dict[str, Any]:
-    if visited is None:
-        visited = set()
+def collect_dependencies_via_sys_views(conn: pyodbc.Connection, proc_name: str, schema: str = 'dbo') -> Dict[str, Any]:
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT 
+            dep.referenced_entity_name,
+            dep.referenced_schema_name,
+            obj.type_desc
+        FROM sys.sql_expression_dependencies dep
+        JOIN sys.objects obj ON dep.referenced_id = obj.object_id
+        JOIN sys.objects caller ON dep.referencing_id = caller.object_id
+        JOIN sys.schemas s ON caller.schema_id = s.schema_id
+        WHERE caller.name = ? AND s.name = ? AND obj.is_ms_shipped = 0
+    """, proc_name, schema)
 
     context = {}
-
-    # Simple regex-based extractors (placeholder logic)
-    table_matches = re.findall(r"(?:FROM|JOIN|INTO|UPDATE|DELETE)\s+([\w]+)", sql_text, re.IGNORECASE)
-    func_matches = re.findall(r"\b([\w]+)\s*\(", sql_text)
-    proc_matches = re.findall(r"EXEC\s+(?:\[?dbo\]?\.)?([\w]+)", sql_text, re.IGNORECASE)
-
-    for name in set(table_matches):
-        key = f"table:{name.lower()}"
-        if key not in visited:
-            visited.add(key)
-            columns = fetch_table_columns(conn, name)
-            context[name] = {
-                "type": "table",
-                "columns": columns
-            }
-
-    for name in set(func_matches):
-        key = f"func:{name.lower()}"
-        if key not in visited:
-            visited.add(key)
-            definition = fetch_function_definition(conn, name)
-            context[name] = {
-                "type": "function",
-                "definition": definition[:500]  # Truncated for context, optional
-            }
-            if current_depth < max_depth:
-                nested = collect_dependencies(definition, conn, max_depth, current_depth + 1, visited)
-                context.update(nested)
-
-    for name in set(proc_matches):
-        key = f"proc:{name.lower()}"
-        if key not in visited:
-            visited.add(key)
-            definition = fetch_proc_definition(conn, name)
-            context[name] = {
-                "type": "procedure",
-                "definition": definition[:500]  # Truncated for context
-            }
-            if current_depth < max_depth:
-                nested = collect_dependencies(definition, conn, max_depth, current_depth + 1, visited)
-                context.update(nested)
+    for row in cursor.fetchall():
+        name, ref_schema, obj_type = row
+        obj_type = obj_type.upper()
+        try:
+            if obj_type in ("USER_TABLE", "VIEW"):
+                columns = fetch_table_columns(conn, name, ref_schema)
+                context[name] = {
+                    "type": "table" if obj_type == "USER_TABLE" else "view",
+                    "columns": columns
+                }
+            elif "FUNCTION" in obj_type:
+                definition = fetch_function_definition(conn, name, ref_schema)
+                context[name] = {
+                    "type": "function",
+                    "definition": definition[:500]
+                }
+            elif obj_type == "SQL_STORED_PROCEDURE":
+                definition = fetch_proc_definition(conn, name, ref_schema)
+                context[name] = {
+                    "type": "procedure",
+                    "definition": definition[:500]
+                }
+        except Exception as e:
+            context[name] = {"error": str(e)}
 
     return context
