@@ -74,7 +74,17 @@ def fetch_scalar_udt_info(conn: pyodbc.Connection, type_name: str) -> Dict[str, 
     return dict(zip([column[0] for column in cursor.description], row)) if row else {}
 
 
-def collect_dependencies_via_sys_views(conn: pyodbc.Connection, proc_name: str, schema: str = 'dbo') -> Dict[str, Any]:
+def collect_dependencies_via_sys_views(conn: pyodbc.Connection, proc_name: str, schema: str = 'dbo', depth: int = 1,
+                                       visited: Set[str] = None) -> Dict[str, Any]:
+    if visited is None:
+        visited = set()
+
+    context = {}
+    key = f"{schema}.{proc_name}".lower()
+    if key in visited or depth < 0:
+        return context
+    visited.add(key)
+
     cursor = conn.cursor()
     cursor.execute("""
         SELECT 
@@ -88,10 +98,13 @@ def collect_dependencies_via_sys_views(conn: pyodbc.Connection, proc_name: str, 
         WHERE caller.name = ? AND s.name = ? AND obj.is_ms_shipped = 0
     """, proc_name, schema)
 
-    context = {}
     for row in cursor.fetchall():
         name, ref_schema, obj_type = row
         obj_type = obj_type.upper()
+        ref_key = f"{ref_schema}.{name}".lower()
+        if ref_key in visited:
+            continue
+
         try:
             if obj_type in ("USER_TABLE", "VIEW"):
                 columns = fetch_table_columns(conn, name, ref_schema)
@@ -105,12 +118,16 @@ def collect_dependencies_via_sys_views(conn: pyodbc.Connection, proc_name: str, 
                     "type": "function",
                     "definition": definition[:500]
                 }
+                nested = collect_dependencies_via_sys_views(conn, name, ref_schema, depth - 1, visited)
+                context.update(nested)
             elif obj_type == "SQL_STORED_PROCEDURE":
                 definition = fetch_proc_definition(conn, name, ref_schema)
                 context[name] = {
                     "type": "procedure",
                     "definition": definition[:500]
                 }
+                nested = collect_dependencies_via_sys_views(conn, name, ref_schema, depth - 1, visited)
+                context.update(nested)
         except Exception as e:
             context[name] = {"error": str(e)}
 

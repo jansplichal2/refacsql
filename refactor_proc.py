@@ -6,6 +6,7 @@ from pathlib import Path
 from dependency_resolver import (
     get_connection,
     fetch_proc_definition,
+    collect_dependencies_via_sys_views,
 )
 import tomli
 import requests
@@ -43,7 +44,8 @@ def log_audit(entry: dict, path: str):
         f.write(json.dumps(entry) + "\n")
 
 
-def call_ai_refactor(api_key: str, endpoint: str, proc_name: str, sql_text: str, context: dict = {}, lint_errors: list = []) -> str:
+def call_ai_refactor(api_key: str, endpoint: str, proc_name: str, sql_text: str, context: dict = {},
+                     lint_errors: list = []) -> str:
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
@@ -82,9 +84,10 @@ def main():
         print(f"Procedure {args.schema}.{args.proc_name} not found.")
         return
 
+    context = collect_dependencies_via_sys_views(conn, args.proc_name, args.schema)
+
     current_exchange = 0
     lint_failures = 0
-    context = {}
 
     while current_exchange < args.max_exchanges:
         print(f"Exchange {current_exchange + 1}...")
@@ -113,7 +116,8 @@ def main():
             "exchange": current_exchange + 1,
             "input_sql": proc_sql,
             "refactored_sql": refactored_sql,
-            "lint_issues": new_lint_issues
+            "lint_issues": new_lint_issues,
+            "context_keys": list(context.keys())
         }, args.audit_log)
 
         if not new_lint_issues:
