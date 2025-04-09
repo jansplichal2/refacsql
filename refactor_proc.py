@@ -84,7 +84,7 @@ def main():
         print(f"Procedure {args.schema}.{args.proc_name} not found.")
         return
 
-    context = collect_dependencies_via_sys_views(conn, args.proc_name, args.schema)
+    context = collect_dependencies_via_sys_views(conn, args.proc_name, args.schema, depth=args.depth)
 
     current_exchange = 0
     lint_failures = 0
