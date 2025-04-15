@@ -8,7 +8,8 @@ def get_connection(config: Dict[str, str]) -> pyodbc.Connection:
         f"SERVER={config['server']},{config['port']};"
         f"DATABASE={config['database']};"
         f"UID={config['user']};"
-        f"PWD={config['password']}"
+        f"PWD={config['password']};"
+        f"TrustServerCertificate=yes"
     )
     return pyodbc.connect(conn_str)
 
@@ -89,7 +90,7 @@ def collect_dependencies_via_sys_views(conn: pyodbc.Connection, proc_name: str, 
     cursor.execute("""
         SELECT 
             dep.referenced_entity_name,
-            dep.referenced_schema_name,
+            coalesce(dep.referenced_schema_name, 'dbo') as referenced_schema_name,
             obj.type_desc
         FROM sys.sql_expression_dependencies dep
         JOIN sys.objects obj ON dep.referenced_id = obj.object_id
