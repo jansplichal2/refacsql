@@ -20,9 +20,8 @@ def log_audit(entry: dict, path: str):
         f.write(json.dumps(entry) + "\n")
 
 
-def build_prompt(proc_name: str, sql_text: str, context: dict) -> dict:
-    return {
-        "instruction": """Refactor and modernize the stored procedure below.
+def build_prompt(proc_name: str, sql_text: str, context: dict, user_notes: str = "") -> dict:
+    instruction = """Refactor and modernize the stored procedure below.
 
 Use the provided metadata to ensure accuracy and correctness.
 
@@ -38,7 +37,12 @@ Use the provided metadata to ensure accuracy and correctness.
 - Remove unnecessary variables or temporary constructs
 - Avoid deprecated or outdated patterns
 - Preserve functional equivalence with original procedure
-""",
+"""
+    if user_notes:
+        instruction += f"\n### Additional Notes:\n- {user_notes.strip()}"
+
+    return {
+        "instruction": instruction,
         "proc_name": proc_name,
         "sql": sql_text,
         "context": context
@@ -63,6 +67,7 @@ def main():
     parser.add_argument("--depth", type=int, default=1, help="Recursion depth for dependency resolution")
     parser.add_argument("--config", default="config/default_config.toml", help="Path to the configuration file")
     parser.add_argument("--dry-run", action="store_true", help="Run without calling the API (just show parsed input)")
+    parser.add_argument("--user-notes", help="Optional additional notes to include in the AI prompt")
 
     args = parser.parse_args()
     config = load_config(args.config)
@@ -79,7 +84,7 @@ def main():
 
     print("Analyzing dependencies...")
     context = collect_dependencies_via_sys_views(conn, args.proc_name, args.schema, depth=args.depth)
-    prompt = build_prompt(args.proc_name, proc_sql, context)
+    prompt = build_prompt(args.proc_name, proc_sql, context, user_notes=args.user_notes)
 
     if args.dry_run:
         print("\n=== DRY RUN ===")
