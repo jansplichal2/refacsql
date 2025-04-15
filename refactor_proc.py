@@ -49,6 +49,7 @@ def main():
     parser.add_argument("--audit-log", required=True, help="Path to write JSONL audit log")
     parser.add_argument("--depth", type=int, default=1, help="Recursion depth for dependency resolution")
     parser.add_argument("--config", default="config/default_config.toml", help="Path to the configuration file")
+    parser.add_argument("--dry-run", action="store_true", help="Run without calling the API (just show parsed input)")
 
     args = parser.parse_args()
     config = load_config(args.config)
@@ -65,8 +66,17 @@ def main():
 
     print("Analyzing dependencies...")
     context = collect_dependencies_via_sys_views(conn, args.proc_name, args.schema, depth=args.depth)
-
     prompt = build_prompt(args.proc_name, proc_sql, context)
+
+    if args.dry_run:
+        print("\n=== DRY RUN ===")
+        print("\n📄 Procedure SQL:")
+        print(proc_sql.strip())
+        print("\n📚 Dependency Context:")
+        print(json.dumps(context, indent=2))
+        print("\n🧠 Prompt:")
+        print(json.dumps(prompt, indent=2))
+        return
 
     try:
         print("Calling AI refactoring service...")
