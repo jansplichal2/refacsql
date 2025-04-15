@@ -26,7 +26,8 @@ brew install msodbcsql18 mssql-tools18
 python refactor_proc.py \
   --proc-name usp_ProcessOrders \
   --audit-log ./logs/usp_ProcessOrders.audit.jsonl \
-  --user-notes "It is safe to remove the filtering by IsArchived, which is obsolete."
+  --user-notes "It is safe to remove the filtering by IsArchived, which is obsolete." \
+  --dry-run
 ```
 
 ## Configuration
