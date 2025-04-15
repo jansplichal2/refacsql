@@ -22,10 +22,23 @@ def log_audit(entry: dict, path: str):
 
 def build_prompt(proc_name: str, sql_text: str, context: dict) -> dict:
     return {
-        "instruction": (
-            "Please format, refactor, and optimize the stored procedure below using the provided metadata. "
-            "Ensure the output is clean, logically structured, and avoids redundant or outdated constructs."
-        ),
+        "instruction": """Refactor and modernize the stored procedure below.
+
+Use the provided metadata to ensure accuracy and correctness.
+
+### Formatting Guidelines:
+- Use **UPPER CASE** for T-SQL keywords (SELECT, FROM, WHERE, etc.)
+- Use **lower_case** for built-in functions (e.g., `isnull`, `convert`)
+- Indent using **4 spaces** (no tabs)
+- Start each clause (SELECT, FROM, WHERE, JOIN, etc.) on a **new line**
+- Insert blank lines between logical blocks (BEGIN/END, IF, WHILE)
+
+### Refactoring Goals:
+- Simplify control flow and logic where safe
+- Remove unnecessary variables or temporary constructs
+- Avoid deprecated or outdated patterns
+- Preserve functional equivalence with original procedure
+""",
         "proc_name": proc_name,
         "sql": sql_text,
         "context": context
