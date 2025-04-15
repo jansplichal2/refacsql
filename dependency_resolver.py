@@ -3,13 +3,14 @@ from typing import List, Dict, Any, Set
 
 
 def get_connection(config: Dict[str, str]) -> pyodbc.Connection:
+    trust_flag = "yes" if config.get("trust_server_certificate", False) else "no"
     conn_str = (
         f"DRIVER={{{config['driver']}}};"
         f"SERVER={config['server']},{config['port']};"
         f"DATABASE={config['database']};"
         f"UID={config['user']};"
         f"PWD={config['password']};"
-        f"TrustServerCertificate=yes"
+        f"TrustServerCertificate={trust_flag};"
     )
     return pyodbc.connect(conn_str)
 

@@ -1,9 +1,8 @@
-`refacsql` is a command-line tool for AI-assisted refactoring of legacy T-SQL stored procedures. It performs dependency analysis, verifies correctness with `sqlfluff`, and maintains a detailed audit of all exchanges.
+`refacsql` is a command-line tool for AI-assisted refactoring of legacy T-SQL stored procedures. It performs dependency analysis, and maintains a detailed audit of all exchanges.
 
 ## Features
 - Refactor large legacy stored procedures using AI
 - Auto-detect and request missing table/function/type metadata
-- Validate syntax using `sqlfluff`
 - Recursively resolve dependencies (configurable depth)
 - Log all interactions and decisions in a JSONL audit file
 
@@ -12,11 +11,20 @@
 pip install -r requirements.txt
 ```
 
+Install ODBC drivers on Mac
+```bash
+# Tap the Microsoft repository (if you haven't already)
+brew tap microsoft/mssql-release https://github.com/Microsoft/homebrew-mssql-release
+
+# Update brew and install the driver and command-line tools
+brew update
+brew install msodbcsql18 mssql-tools18
+```
+
 ## Usage
 ```bash
 python refactor_proc.py \
   --proc-name usp_ProcessOrders \
-  --max-exchanges 3 \
   --audit-log ./logs/usp_ProcessOrders.audit.jsonl
 ```
 
@@ -28,16 +36,8 @@ key = "sk-REDACTED"
 endpoint = "https://api.example.com/refactor"
 
 [defaults]
-max_exchanges = 3
-sql_dialect = "tsql"
 audit_log_dir = "./logs"
 temp_output_dir = "./temp"
-
-[lint]
-enabled = true
-max_lint_failures = 3
-dialect = "tsql"
-sqlfluff_path = "sqlfluff"
 
 [database]
 server = "localhost"
@@ -45,12 +45,10 @@ port = 1433
 user = "my_user"
 password = "my_password"
 database = "my_database"
-driver = "ODBC Driver 17 for SQL Server"
+driver = "ODBC Driver 18 for SQL Server"
+trust_server_certificate = true
 ```
 
-```
-sqlfluff fix --dialect tsql path/to/file.sql
-```
 
 ## License
 MIT
